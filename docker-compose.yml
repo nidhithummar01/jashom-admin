@@ -1,0 +1,9 @@
+services:
+  web:
+    image: docker.jashom.com/jashom-admin:${TAG}
+    container_name: jashom-admin
+
+    ports:
+      - "2129:8080"
+
+    restart: unless-stopped
