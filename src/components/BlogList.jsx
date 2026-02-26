@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { getBlogs, deleteBlog } from '../api'
 import BlogViewModal from './BlogViewModal'
@@ -8,6 +8,7 @@ export default function BlogList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [viewing, setViewing] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
 
   const load = () => {
@@ -21,14 +22,27 @@ export default function BlogList() {
 
   useEffect(() => load(), [])
 
-  const handleDelete = (blog) => {
-    if (!window.confirm(`Delete "${blog.title}"? This cannot be undone.`)) return
-    setDeletingId(blog.id)
-    deleteBlog(blog.id)
-      .then(load)
-      .catch((e) => {
-        alert(e.message || 'Delete failed')
+  const openDeleteConfirm = (blog) => setDeleteConfirm(blog)
+  const closeDeleteConfirm = useCallback(() => {
+    if (!deletingId) setDeleteConfirm(null)
+  }, [deletingId])
+
+  useEffect(() => {
+    if (!deleteConfirm) return
+    const onKey = (e) => e.key === 'Escape' && closeDeleteConfirm()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [deleteConfirm, closeDeleteConfirm])
+
+  const handleConfirmDelete = () => {
+    if (!deleteConfirm) return
+    setDeletingId(deleteConfirm.id)
+    deleteBlog(deleteConfirm.id)
+      .then(() => {
+        setDeleteConfirm(null)
+        load()
       })
+      .catch((e) => setError(e.message || 'Delete failed'))
       .finally(() => setDeletingId(null))
   }
 
@@ -67,7 +81,7 @@ export default function BlogList() {
                   <button
                     type="button"
                     className="btn btn-danger btn-sm"
-                    onClick={() => handleDelete(b)}
+                    onClick={() => openDeleteConfirm(b)}
                     disabled={deletingId === b.id}
                   >
                     {deletingId === b.id ? 'Deleting…' : 'Delete'}
@@ -80,6 +94,40 @@ export default function BlogList() {
       </div>
       {viewing && (
         <BlogViewModal blog={viewing} onClose={() => setViewing(null)} />
+      )}
+      {deleteConfirm && (
+        <div
+          className="modal-backdrop modal-backdrop--center"
+          onClick={closeDeleteConfirm}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-confirm-title"
+        >
+          <div className="modal-content modal-content--confirm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 id="delete-confirm-title" className="modal-title">Delete blog?</h2>
+              <button type="button" className="modal-close" onClick={closeDeleteConfirm} aria-label="Close">×</button>
+            </div>
+            <div className="modal-body">
+              <p className="delete-confirm-message">
+                &ldquo;{deleteConfirm.title}&rdquo; will be permanently deleted. This cannot be undone.
+              </p>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-outline" onClick={closeDeleteConfirm} disabled={!!deletingId}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleConfirmDelete}
+                  disabled={!!deletingId}
+                >
+                  {deletingId === deleteConfirm.id ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

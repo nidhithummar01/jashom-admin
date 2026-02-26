@@ -1,5 +1,8 @@
+import { getToken, clearAuth } from './auth.js'
+
 /**
  * API client for Jashom backend. Base URL from env — no hardcoded URLs.
+ * Adds Authorization: Bearer <token> when logged in.
  */
 const getBaseUrl = () => {
   const url = import.meta.env.VITE_API_URL
@@ -13,14 +16,31 @@ const getBaseUrl = () => {
 const api = (path, options = {}) => {
   const base = getBaseUrl()
   const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
-  return fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+  const token = getToken()
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  }
+  return fetch(url, { ...options, headers }).then((r) => {
+    if (r.status === 401 && path !== '/v1/admin/auth/login') {
+      clearAuth()
+      window.location.href = '/login'
+      return Promise.reject(new Error('Session expired'))
+    }
+    return r
   })
 }
+
+/** POST /v1/admin/auth/login — returns { token, admin } */
+export const login = (email, password) =>
+  api('/v1/admin/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  }).then((r) => {
+    if (!r.ok) return r.json().then((b) => { throw new Error(b.error || r.statusText) })
+    return r.json()
+  })
 
 export const getBlogs = (params = {}) => {
   const q = new URLSearchParams()
